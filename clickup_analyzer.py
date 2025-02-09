@@ -86,14 +86,14 @@ def fetch_workspace_details(api_key, team_id):
         task_completion_rate = (completed_tasks / task_count * 100) if task_count > 0 else 0
         
         return {
-            "spaces": space_count,
-            "folders": folder_count,
-            "lists": list_count,
-            "tasks": task_count,
-            "completed_tasks": completed_tasks,
-            "task_completion_rate": round(task_completion_rate, 2),
-            "overdue_tasks": overdue_tasks,
-            "high_priority_tasks": high_priority_tasks
+            "📁 Spaces": space_count,
+            "📂 Folders": folder_count,
+            "🗂️ Lists": list_count,
+            "📝 Total Tasks": task_count,
+            "✅ Completed Tasks": completed_tasks,
+            "📈 Task Completion Rate": round(task_completion_rate, 2),
+            "⚠️ Overdue Tasks": overdue_tasks,
+            "🔥 High Priority Tasks": high_priority_tasks
         }
     except Exception as e:
         return {"error": f"Exception: {str(e)}"}
@@ -106,23 +106,7 @@ def get_ai_recommendations(use_case, workspace_data):
     **📌 Use Case:** {use_case}
     
     ### 🔍 Workspace Overview:
-    """
-    
-    if workspace_data:
-        prompt += f"""
-        - **Spaces:** {workspace_data['spaces']}
-        - **Folders:** {workspace_data['folders']}
-        - **Lists:** {workspace_data['lists']}
-        - **Total Tasks:** {workspace_data['tasks']}
-        - **Completed Tasks:** {workspace_data['completed_tasks']}
-        - **Task Completion Rate:** {workspace_data['task_completion_rate']}%
-        - **Overdue Tasks:** {workspace_data['overdue_tasks']}
-        - **High Priority Tasks:** {workspace_data['high_priority_tasks']}
-        """
-    else:
-        prompt += "(No workspace data available - generating general insights.)"
-    
-    prompt += """
+    {workspace_data}
     
     ### 📈 Productivity Analysis:
     Provide insights on how to optimize productivity for this use case.
@@ -131,7 +115,8 @@ def get_ai_recommendations(use_case, workspace_data):
     Suggest practical steps to improve efficiency and organization.
     
     ### 🛠️ Useful ClickUp Templates & Resources:
-    List some ClickUp templates and best practices for this use case.
+    List relevant ClickUp templates and best practices for this use case.
+    Provide hyperlinks to useful resources on clickup.com, university.clickup.com, or help.clickup.com.
     """
     
     try:
@@ -166,17 +151,8 @@ if st.button("🚀 Analyze Workspace"):
             
             for i, key in enumerate(keys):
                 with cols[i % 4]:
-                    st.metric(label=key.replace("_", " ").title(), value=workspace_data[key])
-            
-            st.subheader("🤖 AI Recommendations:")
-            st.write(get_ai_recommendations(use_case, workspace_data))
+                    st.metric(label=key, value=workspace_data[key])
             
             st.subheader("🛠️ Useful ClickUp Templates & Resources:")
-            resources = {
-                "[Project Management Template](https://clickup.com/templates/project-management)": "Project Management",
-                "[Sales CRM Template](https://clickup.com/templates/sales-crm)": "Sales CRM",
-                "[HR & Recruitment Template](https://clickup.com/templates/hr-recruitment)": "HR & Recruitment",
-                "[Marketing Campaign Template](https://clickup.com/templates/marketing-campaign)": "Marketing Campaign"
-            }
-            for link, label in resources.items():
-                st.markdown(f"🔗 {link}", unsafe_allow_html=True)
+            ai_recommendations = get_ai_recommendations(use_case, workspace_data)
+            st.markdown(ai_recommendations, unsafe_allow_html=True)
