@@ -1,19 +1,25 @@
-import google.generativeai as genai
 import os
 import requests
 import streamlit as st
 import time
+import openai
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 # Load .env file
 load_dotenv()
 
 # Get API Key from .env
-genai_api_key = os.getenv("GEMINI_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+openai_org_id = os.getenv("OPENAI_ORG_ID")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 
-# Configure Gemini AI if API key is available
-if genai_api_key:
-    genai.configure(api_key=genai_api_key)
+if openai_api_key:
+    openai.organization = openai_org_id
+    openai.api_key = openai_api_key
+
+if gemini_api_key:
+    genai.configure(api_key=gemini_api_key)
 
 def get_clickup_workspace_data(api_key):
     """
@@ -44,7 +50,6 @@ def fetch_workspace_details(api_key, team_id):
     headers = {"Authorization": api_key}
     
     try:
-        # Get spaces
         spaces_url = f"https://api.clickup.com/api/v2/team/{team_id}/space"
         spaces_response = requests.get(spaces_url, headers=headers).json()
         spaces = spaces_response.get("spaces", [])
@@ -55,7 +60,6 @@ def fetch_workspace_details(api_key, team_id):
         for space in spaces:
             space_id = space["id"]
             
-            # Get folders
             folders_url = f"https://api.clickup.com/api/v2/space/{space_id}/folder"
             folders_response = requests.get(folders_url, headers=headers).json()
             folders = folders_response.get("folders", [])
@@ -64,7 +68,6 @@ def fetch_workspace_details(api_key, team_id):
             for folder in folders:
                 folder_id = folder["id"]
                 
-                # Get lists
                 lists_url = f"https://api.clickup.com/api/v2/folder/{folder_id}/list"
                 lists_response = requests.get(lists_url, headers=headers).json()
                 lists = lists_response.get("lists", [])
@@ -73,7 +76,6 @@ def fetch_workspace_details(api_key, team_id):
                 for lst in lists:
                     list_id = lst["id"]
                     
-                    # Get tasks
                     tasks_url = f"https://api.clickup.com/api/v2/list/{list_id}/task"
                     tasks_response = requests.get(tasks_url, headers=headers).json()
                     tasks = tasks_response.get("tasks", [])
@@ -98,15 +100,15 @@ def fetch_workspace_details(api_key, team_id):
     except Exception as e:
         return {"error": f"Exception: {str(e)}"}
 
-def get_ai_recommendations(use_case, workspace_data):
+def get_ai_recommendations(use_case, workspace_details):
     """
-    Generates AI-powered recommendations using Gemini AI based on ClickUp workspace data.
+    Generates AI-powered recommendations using OpenAI or Gemini based on ClickUp workspace details.
     """
     prompt = f"""
     **📌 Use Case:** {use_case}
     
     ### 🔍 Workspace Overview:
-    {workspace_data}
+    {workspace_details if workspace_details else "(No workspace details available)"}
     
     ### 📈 Productivity Analysis:
     Provide insights on how to optimize productivity for this use case.
@@ -120,19 +122,24 @@ def get_ai_recommendations(use_case, workspace_data):
     """
     
     try:
-        if genai_api_key:
+        if openai_api_key:
+            response = openai.ChatCompletion.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": "You are a helpful assistant."},
+                          {"role": "user", "content": prompt}]
+            )
+            return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        if gemini_api_key:
             model = genai.GenerativeModel("gemini-pro")
             response = model.generate_content(prompt)
             return response.text
-        else:
-            return "⚠️ AI recommendations are not available because the API key is missing."
-    except Exception as e:
-        return f"Error: {str(e)}"
+    return "⚠️ AI recommendations are not available because both OpenAI and Gemini failed."
 
 st.set_page_config(page_title="ClickUp AI Workspace Analyzer", layout="wide")
 st.title("📊 ClickUp AI Workspace Analyzer")
 
-clickup_api_key = st.text_input("🔑 ClickUp API Key", type="password")
+clickup_api_key = st.text_input("🔑 ClickUp API Key (Optional)", type="password")
 use_case = st.text_input("📌 Use Case (e.g., Consulting, Sales)")
 
 if st.button("🚀 Analyze Workspace"):
@@ -140,19 +147,19 @@ if st.button("🚀 Analyze Workspace"):
         st.error("Please enter a use case.")
     else:
         st.subheader("📊 Fetching ClickUp Workspace Data...")
-        workspace_data = get_clickup_workspace_data(clickup_api_key) if clickup_api_key else None
+        workspace_details = get_clickup_workspace_data(clickup_api_key) if clickup_api_key else None
         
-        if workspace_data and "error" in workspace_data:
-            st.error(f"❌ {workspace_data['error']}")
+        if workspace_details and "error" in workspace_details:
+            st.error(f"❌ {workspace_details['error']}")
         else:
             st.subheader("📝 Workspace Analysis:")
             cols = st.columns(4)
-            keys = list(workspace_data.keys())
+            keys = list(workspace_details.keys()) if workspace_details else []
             
             for i, key in enumerate(keys):
                 with cols[i % 4]:
-                    st.metric(label=key, value=workspace_data[key])
+                    st.metric(label=key, value=workspace_details[key])
             
             st.subheader("🛠️ Useful ClickUp Templates & Resources:")
-            ai_recommendations = get_ai_recommendations(use_case, workspace_data)
+            ai_recommendations = get_ai_recommendations(use_case, workspace_details)
             st.markdown(ai_recommendations, unsafe_allow_html=True)
