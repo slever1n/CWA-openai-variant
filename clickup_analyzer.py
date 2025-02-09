@@ -142,7 +142,7 @@ st.set_page_config(page_title="ClickUp Workspace Analyzer", page_icon="🚀", la
 st.title("📊 ClickUp AI Workspace Analyzer")
 
 clickup_api_key = st.text_input("🔑 ClickUp API Key (Optional)", type="password")
-use_case = st.text_input("📌 Use Case (e.g., Consulting, Sales)")
+use_case = st.text_input("📌 Use Case (e.g., Project Management, Sales, Use of Dashboard, feature usage)")
 
 if st.button("🚀 Analyze Workspace"):
     if not use_case:
