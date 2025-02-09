@@ -136,7 +136,9 @@ def get_ai_recommendations(use_case, workspace_details):
             return response.text
     return "⚠️ AI recommendations are not available because both OpenAI and Gemini failed."
 
-st.set_page_config(page_title="ClickUp AI Workspace Analyzer", layout="wide")
+
+
+st.set_page_config(page_title="ClickUp Workspace Analyzer", page_icon="🚀", layout="wide")
 st.title("📊 ClickUp AI Workspace Analyzer")
 
 clickup_api_key = st.text_input("🔑 ClickUp API Key (Optional)", type="password")
