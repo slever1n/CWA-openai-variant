@@ -8,22 +8,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get API Key from .env
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai_api_key = os.getenv("GEMINI_API_KEY")
 
-# Configure Gemini AI
-genai.configure(api_key=GEMINI_API_KEY)
+# Configure Gemini AI if API key is available
+if genai_api_key:
+    genai.configure(api_key=genai_api_key)
 
 def get_clickup_workspace_data(api_key):
     """
     Fetches workspace data from ClickUp API, including spaces, folders, lists, and tasks.
     """
+    if not api_key:
+        return None  # Skip API call if no key is provided
+    
     url = "https://api.clickup.com/api/v2/team"
     headers = {"Authorization": api_key}
     
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            # Simulating ClickUp workspace analysis (replace with real API data)
             return {
                 "spaces": 5,
                 "folders": 12,
@@ -47,29 +50,41 @@ def get_ai_recommendations(use_case, workspace_data):
     **📌 Use Case:** {use_case}
     
     ### 🔍 Workspace Overview:
-    - **Spaces:** {workspace_data['spaces']}
-    - **Folders:** {workspace_data['folders']}
-    - **Lists:** {workspace_data['lists']}
-    - **Total Tasks:** {workspace_data['tasks']}
-    - **Completed Tasks:** {workspace_data['completed_tasks']}
-    - **Task Completion Rate:** {workspace_data['task_completion_rate']}%
-    - **Overdue Tasks:** {workspace_data['overdue_tasks']}
-    - **High Priority Tasks:** {workspace_data['high_priority_tasks']}
+    """
+    
+    if workspace_data:
+        prompt += f"""
+        - **Spaces:** {workspace_data['spaces']}
+        - **Folders:** {workspace_data['folders']}
+        - **Lists:** {workspace_data['lists']}
+        - **Total Tasks:** {workspace_data['tasks']}
+        - **Completed Tasks:** {workspace_data['completed_tasks']}
+        - **Task Completion Rate:** {workspace_data['task_completion_rate']}%
+        - **Overdue Tasks:** {workspace_data['overdue_tasks']}
+        - **High Priority Tasks:** {workspace_data['high_priority_tasks']}
+        """
+    else:
+        prompt += "(No workspace data available - generating general insights.)"
+    
+    prompt += """
     
     ### 📈 Productivity Analysis:
-    Provide insights on how the workspace is performing and areas for improvement.
+    Provide insights on how to optimize productivity for this use case.
     
     ### ✅ Actionable Recommendations:
-    Suggest practical steps to enhance productivity based on the use case.
+    Suggest practical steps to improve efficiency and organization.
     
     ### 🛠️ Useful ClickUp Templates & Resources:
     List some ClickUp templates and best practices for this use case.
     """
     
     try:
-        model = genai.GenerativeModel("gemini-pro")
-        response = model.generate_content(prompt)
-        return response.text  # Extract the text response
+        if genai_api_key:
+            model = genai.GenerativeModel("gemini-pro")
+            response = model.generate_content(prompt)
+            return response.text
+        else:
+            return "⚠️ AI recommendations are not available because the API key is missing."
     except Exception as e:
         return f"Error: {str(e)}"
 
@@ -84,26 +99,29 @@ use_case = st.text_input("📌 Use Case (e.g., Consulting, Sales)")
 
 # Analyze Button
 if st.button("🚀 Analyze Workspace"):
-    if not clickup_api_key or not use_case:
-        st.error("Please enter ClickUp API key and use case.")
+    if not use_case:
+        st.error("Please enter a use case.")
     else:
         st.subheader("📊 Fetching ClickUp Workspace Data...")
         
-        # Fetch ClickUp Workspace Data
-        workspace_data = get_clickup_workspace_data(clickup_api_key)
+        # Fetch ClickUp Workspace Data (Only if API key is provided)
+        workspace_data = get_clickup_workspace_data(clickup_api_key) if clickup_api_key else None
         
-        if "error" in workspace_data:
+        if workspace_data and "error" in workspace_data:
             st.error(f"❌ {workspace_data['error']}")
         else:
             st.subheader("📝 Workspace Analysis:")
-            st.write(f"🔹 **Spaces:** {workspace_data['spaces']}")
-            st.write(f"🔹 **Folders:** {workspace_data['folders']}")
-            st.write(f"🔹 **Lists:** {workspace_data['lists']}")
-            st.write(f"📌 **Total Tasks:** {workspace_data['tasks']}")
-            st.write(f"✅ **Completed Tasks:** {workspace_data['completed_tasks']}")
-            st.write(f"📈 **Task Completion Rate:** {workspace_data['task_completion_rate']}%")
-            st.write(f"⚠️ **Overdue Tasks:** {workspace_data['overdue_tasks']}")
-            st.write(f"🔥 **High Priority Tasks:** {workspace_data['high_priority_tasks']}")
+            if workspace_data:
+                st.write(f"🔹 **Spaces:** {workspace_data['spaces']}")
+                st.write(f"🔹 **Folders:** {workspace_data['folders']}")
+                st.write(f"🔹 **Lists:** {workspace_data['lists']}")
+                st.write(f"📌 **Total Tasks:** {workspace_data['tasks']}")
+                st.write(f"✅ **Completed Tasks:** {workspace_data['completed_tasks']}")
+                st.write(f"📈 **Task Completion Rate:** {workspace_data['task_completion_rate']}%")
+                st.write(f"⚠️ **Overdue Tasks:** {workspace_data['overdue_tasks']}")
+                st.write(f"🔥 **High Priority Tasks:** {workspace_data['high_priority_tasks']}")
+            else:
+                st.write("🚀 Skipping workspace analysis (API key not provided)")
             
             st.subheader("🤖 AI Recommendations:")
             
