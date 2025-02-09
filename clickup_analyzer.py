@@ -116,6 +116,9 @@ def get_ai_recommendations(use_case, workspace_details):
     ### ✅ Actionable Recommendations:
     Suggest practical steps to improve efficiency and organization.
     
+    ### 🏆 Best Practices & Tips:
+    Share industry-specific best practices to maximize workflow efficiency.
+    
     ### 🛠️ Useful ClickUp Templates & Resources:
     List relevant ClickUp templates and best practices for this use case.
     Provide hyperlinks to useful resources on clickup.com, university.clickup.com, or help.clickup.com.
@@ -146,20 +149,25 @@ if st.button("🚀 Analyze Workspace"):
     if not use_case:
         st.error("Please enter a use case.")
     else:
-        st.subheader("📊 Fetching ClickUp Workspace Data...")
-        workspace_details = get_clickup_workspace_data(clickup_api_key) if clickup_api_key else None
+        with st.spinner("Fetching ClickUp Workspace Data..."):
+            if clickup_api_key:
+                workspace_details = get_clickup_workspace_data(clickup_api_key)
+            else:
+                workspace_details = None
+                st.warning("ℹ️ ClickUp API key is blank. AI recommendations will be based only on the use case.")
         
         if workspace_details and "error" in workspace_details:
             st.error(f"❌ {workspace_details['error']}")
-        else:
+        elif workspace_details:
             st.subheader("📝 Workspace Analysis:")
             cols = st.columns(4)
-            keys = list(workspace_details.keys()) if workspace_details else []
-            
+            keys = list(workspace_details.keys())
             for i, key in enumerate(keys):
                 with cols[i % 4]:
                     st.metric(label=key, value=workspace_details[key])
-            
-            st.subheader("🛠️ Useful ClickUp Templates & Resources:")
+        
+        with st.spinner("Generating AI Recommendations..."):
             ai_recommendations = get_ai_recommendations(use_case, workspace_details)
             st.markdown(ai_recommendations, unsafe_allow_html=True)
+
+st.markdown("<div style='position: fixed; bottom: 10px; right: 10px;'>Made by: Yul</div>", unsafe_allow_html=True)
