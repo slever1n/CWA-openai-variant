@@ -107,21 +107,18 @@ def get_ai_recommendations(use_case, workspace_details):
     prompt = f"""
     **📌 Use Case:** {use_case}
     
-    ### 🔍 Workspace Overview:
-    {workspace_details if workspace_details else "(No workspace details available)"}
-    
     ### 📈 Productivity Analysis:
-    Provide insights on how to optimize productivity for this use case.
+    Provide insights on how to optimize productivity for this use case. Provide up to 8 bullets
     
     ### ✅ Actionable Recommendations:
-    Suggest practical steps to improve efficiency and organization.
+    Suggest practical steps to improve efficiency and organization based on the workspace analysis. Provide up to 8 bullets
     
     ### 🏆 Best Practices & Tips:
-    Share industry-specific best practices to maximize workflow efficiency.
+    Share industry-specific best practices to maximize workflow efficiency. Provide up to 8 bullets
     
     ### 🛠️ Useful ClickUp Templates & Resources:
     List relevant ClickUp templates and best practices for this use case.
-    Provide hyperlinks to useful resources on clickup.com, university.clickup.com, or help.clickup.com.
+    Provide hyperlinks to useful resources on clickup.com, university.clickup.com, or help.clickup.com. Provide up to 8 bullets
     """
     
     try:
