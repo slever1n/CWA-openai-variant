@@ -169,4 +169,4 @@ if st.button("🚀 Analyze Workspace"):
             ai_recommendations = get_ai_recommendations(use_case, workspace_details)
             st.markdown(ai_recommendations, unsafe_allow_html=True)
 
-st.markdown("<div style='position: fixed; bottom: 10px; right: 10px;'>Made by: Yul</div>", unsafe_allow_html=True)
+st.markdown("<div style='position: fixed; bottom: 10px; right: 10px;'>Made by: Yul ☺️</div>", unsafe_allow_html=True)
