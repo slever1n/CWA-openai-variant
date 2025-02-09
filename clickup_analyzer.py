@@ -2,6 +2,7 @@ import google.generativeai as genai
 import os
 import requests
 import streamlit as st
+import time
 from dotenv import load_dotenv
 
 # Load .env file
@@ -16,7 +17,7 @@ if genai_api_key:
 
 def get_clickup_workspace_data(api_key):
     """
-    Fetches workspace data from ClickUp API, including spaces, folders, lists, and tasks.
+    Fetches real workspace data from ClickUp API, including spaces, folders, lists, and tasks.
     """
     if not api_key:
         return None  # Skip API call if no key is provided
@@ -27,18 +28,73 @@ def get_clickup_workspace_data(api_key):
     try:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            return {
-                "spaces": 5,
-                "folders": 12,
-                "lists": 20,
-                "tasks": 150,
-                "completed_tasks": 120,
-                "task_completion_rate": 80,
-                "overdue_tasks": 5,
-                "high_priority_tasks": 8
-            }
+            teams = response.json().get("teams", [])
+            if teams:
+                team_id = teams[0]["id"]
+                return fetch_workspace_details(api_key, team_id)
+            else:
+                return {"error": "No teams found in ClickUp workspace."}
         else:
             return {"error": f"Error: {response.status_code} - {response.json()}"}
+    except Exception as e:
+        return {"error": f"Exception: {str(e)}"}
+
+def fetch_workspace_details(api_key, team_id):
+    """Fetches workspace details including spaces, folders, lists, and tasks."""
+    headers = {"Authorization": api_key}
+    
+    try:
+        # Get spaces
+        spaces_url = f"https://api.clickup.com/api/v2/team/{team_id}/space"
+        spaces_response = requests.get(spaces_url, headers=headers).json()
+        spaces = spaces_response.get("spaces", [])
+        
+        space_count = len(spaces)
+        folder_count, list_count, task_count, completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0, 0, 0, 0
+        
+        for space in spaces:
+            space_id = space["id"]
+            
+            # Get folders
+            folders_url = f"https://api.clickup.com/api/v2/space/{space_id}/folder"
+            folders_response = requests.get(folders_url, headers=headers).json()
+            folders = folders_response.get("folders", [])
+            folder_count += len(folders)
+            
+            for folder in folders:
+                folder_id = folder["id"]
+                
+                # Get lists
+                lists_url = f"https://api.clickup.com/api/v2/folder/{folder_id}/list"
+                lists_response = requests.get(lists_url, headers=headers).json()
+                lists = lists_response.get("lists", [])
+                list_count += len(lists)
+                
+                for lst in lists:
+                    list_id = lst["id"]
+                    
+                    # Get tasks
+                    tasks_url = f"https://api.clickup.com/api/v2/list/{list_id}/task"
+                    tasks_response = requests.get(tasks_url, headers=headers).json()
+                    tasks = tasks_response.get("tasks", [])
+                    
+                    task_count += len(tasks)
+                    completed_tasks += sum(1 for task in tasks if task.get("status", "") == "complete")
+                    overdue_tasks += sum(1 for task in tasks if task.get("due_date") and int(task["due_date"]) < int(time.time() * 1000))
+                    high_priority_tasks += sum(1 for task in tasks if task.get("priority", "") in ["urgent", "high"])
+        
+        task_completion_rate = (completed_tasks / task_count * 100) if task_count > 0 else 0
+        
+        return {
+            "spaces": space_count,
+            "folders": folder_count,
+            "lists": list_count,
+            "tasks": task_count,
+            "completed_tasks": completed_tasks,
+            "task_completion_rate": round(task_completion_rate, 2),
+            "overdue_tasks": overdue_tasks,
+            "high_priority_tasks": high_priority_tasks
+        }
     except Exception as e:
         return {"error": f"Exception: {str(e)}"}
 
@@ -88,55 +144,39 @@ def get_ai_recommendations(use_case, workspace_data):
     except Exception as e:
         return f"Error: {str(e)}"
 
-# ---------------------- Streamlit UI ----------------------
-
 st.set_page_config(page_title="ClickUp AI Workspace Analyzer", layout="wide")
 st.title("📊 ClickUp AI Workspace Analyzer")
 
-# Input Fields
 clickup_api_key = st.text_input("🔑 ClickUp API Key", type="password")
 use_case = st.text_input("📌 Use Case (e.g., Consulting, Sales)")
 
-# Analyze Button
 if st.button("🚀 Analyze Workspace"):
     if not use_case:
         st.error("Please enter a use case.")
     else:
         st.subheader("📊 Fetching ClickUp Workspace Data...")
-        
-        # Fetch ClickUp Workspace Data (Only if API key is provided)
         workspace_data = get_clickup_workspace_data(clickup_api_key) if clickup_api_key else None
         
         if workspace_data and "error" in workspace_data:
             st.error(f"❌ {workspace_data['error']}")
         else:
             st.subheader("📝 Workspace Analysis:")
-            if workspace_data:
-                st.write(f"🔹 **Spaces:** {workspace_data['spaces']}")
-                st.write(f"🔹 **Folders:** {workspace_data['folders']}")
-                st.write(f"🔹 **Lists:** {workspace_data['lists']}")
-                st.write(f"📌 **Total Tasks:** {workspace_data['tasks']}")
-                st.write(f"✅ **Completed Tasks:** {workspace_data['completed_tasks']}")
-                st.write(f"📈 **Task Completion Rate:** {workspace_data['task_completion_rate']}%")
-                st.write(f"⚠️ **Overdue Tasks:** {workspace_data['overdue_tasks']}")
-                st.write(f"🔥 **High Priority Tasks:** {workspace_data['high_priority_tasks']}")
-            else:
-                st.write("🚀 Skipping workspace analysis (API key not provided)")
+            cols = st.columns(4)
+            keys = list(workspace_data.keys())
+            
+            for i, key in enumerate(keys):
+                with cols[i % 4]:
+                    st.metric(label=key.replace("_", " ").title(), value=workspace_data[key])
             
             st.subheader("🤖 AI Recommendations:")
+            st.write(get_ai_recommendations(use_case, workspace_data))
             
-            # Get AI Recommendations
-            ai_recommendations = get_ai_recommendations(use_case, workspace_data)
-            st.write(ai_recommendations)
-            
-            # Add ClickUp Templates & Resources
             st.subheader("🛠️ Useful ClickUp Templates & Resources:")
             resources = {
-                "Project Management Template": "[Click Here](https://clickup.com/templates/project-management)",
-                "Sales CRM Template": "[Click Here](https://clickup.com/templates/sales-crm)",
-                "HR & Recruitment Template": "[Click Here](https://clickup.com/templates/hr-recruitment)",
-                "Marketing Campaign Template": "[Click Here](https://clickup.com/templates/marketing-campaign)"
+                "[Project Management Template](https://clickup.com/templates/project-management)": "Project Management",
+                "[Sales CRM Template](https://clickup.com/templates/sales-crm)": "Sales CRM",
+                "[HR & Recruitment Template](https://clickup.com/templates/hr-recruitment)": "HR & Recruitment",
+                "[Marketing Campaign Template](https://clickup.com/templates/marketing-campaign)": "Marketing Campaign"
             }
-            
-            for resource, link in resources.items():
-                st.markdown(f"🔗 **{resource}:** {link}", unsafe_allow_html=True)
+            for link, label in resources.items():
+                st.markdown(f"🔗 {link}", unsafe_allow_html=True)
