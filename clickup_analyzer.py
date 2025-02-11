@@ -46,7 +46,7 @@ def get_company_info(company_name):
                     {"role": "user", "content": prompt}
                 ]
             )
-            return response["choices"][0]["message"]["content"]
+            return response.choices[0].message.content
         else:
             return "No AI service available for generating company profile."
     except Exception as e:
@@ -250,7 +250,7 @@ def get_ai_recommendations(use_case, company_profile, workspace_details):
                     {"role": "user", "content": prompt}
                 ]
             )
-            return response["choices"][0]["message"]["content"]
+            return response.choices[0].message.content
     except Exception as e:
         return f"⚠️ AI recommendations are not available: {str(e)}"
 
