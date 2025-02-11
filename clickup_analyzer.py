@@ -5,6 +5,7 @@ import openai
 import textwrap
 import concurrent.futures
 import logging
+from g4f.client import Client
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -38,15 +39,13 @@ def get_company_info(company_name):
     """)
     
     try:
-        if openai_api_key:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return response.choices[0].message.content
+        client = Client()
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello"}],
+    web_search=False
+)
+print(response.choices[0].message.content)
         else:
             return "No AI service available for generating company profile."
     except Exception as e:
@@ -242,15 +241,13 @@ def get_ai_recommendations(use_case, company_profile, workspace_details):
     """)
     
     try:
-        if openai_api_key:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ]
-            )
-            return response.choices[0].message.content
+        client = Client()
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[{"role": "user", "content": "Hello"}],
+    web_search=False
+)
+print(response.choices[0].message.content)
     except Exception as e:
         return f"⚠️ AI recommendations are not available: {str(e)}"
 
