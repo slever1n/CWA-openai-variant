@@ -1,11 +1,11 @@
+import os
 import requests
 import streamlit as st
 import time
-import openai
 import textwrap
 import concurrent.futures
 import logging
-from g4f.client import Client
+from gpt4free import providers, gpt4free
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -13,18 +13,9 @@ logging.basicConfig(level=logging.INFO)
 # Set page title and icon
 st.set_page_config(page_title="ClickUp Workspace Analysis", page_icon="🚀", layout="wide")
 
-# Retrieve API keys from Streamlit secrets
-openai_api_key = st.secrets.get("OPENAI_API_KEY")
-openai_org_id = st.secrets.get("OPENAI_ORG_ID")
-
-# Configure OpenAI if API keys are available
-if openai_api_key:
-    openai.organization = openai_org_id
-    openai.api_key = openai_api_key
-
 def get_company_info(company_name):
     """
-    Generates a short company profile for the given company name using OpenAI.
+    Generates a short company profile for the given company name using GPT4Free.
     """
     if not company_name:
         return "No company information provided."
@@ -39,15 +30,12 @@ def get_company_info(company_name):
     """)
     
     try:
-        client = Client()
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[{"role": "user", "content": "Hello"}],
-    web_search=False
-)
-print(response.choices[0].message.content)
-        else:
-            return "No AI service available for generating company profile."
+        response = gpt4free.Completion.create(
+            provider=providers.You,  # You can choose the provider you prefer
+            prompt=prompt,
+            model="gpt-3.5-turbo"
+        )
+        return response.text
     except Exception as e:
         return f"Error fetching company details: {str(e)}"
 
@@ -241,13 +229,12 @@ def get_ai_recommendations(use_case, company_profile, workspace_details):
     """)
     
     try:
-        client = Client()
-response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[{"role": "user", "content": "Hello"}],
-    web_search=False
-)
-print(response.choices[0].message.content)
+        response = gpt4free.Completion.create(
+            provider=providers.You,  # You can choose the provider you prefer
+            prompt=prompt,
+            model="gpt-3.5-turbo"
+        )
+        return response.text
     except Exception as e:
         return f"⚠️ AI recommendations are not available: {str(e)}"
 
@@ -296,10 +283,4 @@ if st.button("🚀 Let's Go!"):
         st.subheader("🏢 Company Profile")
         st.markdown(company_profile, unsafe_allow_html=True)
     else:
-        company_profile = "No company information provided."
-    
-    with st.spinner("Generating AI recommendations..."):
-        recommendations = get_ai_recommendations(use_case, company_profile, workspace_data)
-        st.markdown(recommendations, unsafe_allow_html=True)
-
-st.markdown("<div style='position: fixed; bottom: 10px; left: 10px; font-size: 12px; color: orange; '>A little tool made by: Yul 😊</div>", unsafe_allow_html=True)
+        company_profile = "No company information provided
