@@ -1,11 +1,10 @@
-import os
 import requests
 import streamlit as st
 import time
+import openai
 import textwrap
 import concurrent.futures
 import logging
-from gpt4free import providers, gpt4free
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -13,9 +12,18 @@ logging.basicConfig(level=logging.INFO)
 # Set page title and icon
 st.set_page_config(page_title="ClickUp Workspace Analysis", page_icon="🚀", layout="wide")
 
+# Retrieve API keys from Streamlit secrets
+openai_api_key = st.secrets.get("OPENAI_API_KEY")
+openai_org_id = st.secrets.get("OPENAI_ORG_ID")
+
+# Configure OpenAI if API keys are available
+if openai_api_key:
+    openai.organization = openai_org_id
+    openai.api_key = openai_api_key
+
 def get_company_info(company_name):
     """
-    Generates a short company profile for the given company name using GPT4Free.
+    Generates a short company profile for the given company name using OpenAI.
     """
     if not company_name:
         return "No company information provided."
@@ -30,13 +38,19 @@ def get_company_info(company_name):
     """)
     
     try:
-        response = gpt4free.Completion.create(
-            provider=providers.You,  # You can choose the provider you prefer
-            prompt=prompt,
-            model="gpt-3.5-turbo"
-        )
-        return response.text
+        if openai_api_key:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content
+        else:
+            return "No AI service available for generating company profile."
     except Exception as e:
+        logging.error(f"Error fetching company details: {str(e)}")
         return f"Error fetching company details: {str(e)}"
 
 def fetch_workspaces(api_key):
@@ -67,37 +81,41 @@ def fetch_workspace_details(api_key, team_id):
     
     try:
         spaces_url = f"https://api.clickup.com/api/v2/team/{team_id}/space"
-        start_time = time.time()
-        spaces_response = requests.get(spaces_url, headers=headers).json()
-        logging.info(f"API call to {spaces_url} took {time.time() - start_time:.2f} seconds")
+        spaces_response = make_api_call(spaces_url, headers)
         spaces = spaces_response.get("spaces", [])
         
-        space_count = len(spaces)
-        folder_count, list_count, task_count = 0, 0, 0
-        completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
+        workspace_metrics = {
+            "space_count": len(spaces),
+            "folder_count": 0,
+            "list_count": 0,
+            "task_count": 0,
+            "completed_tasks": 0,
+            "overdue_tasks": 0,
+            "high_priority_tasks": 0
+        }
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_space = {executor.submit(fetch_space_details, api_key, space["id"]): space for space in spaces}
             for future in concurrent.futures.as_completed(future_to_space):
                 space_result = future.result()
-                folder_count += space_result['folder_count']
-                list_count += space_result['list_count']
-                task_count += space_result['task_count']
-                completed_tasks += space_result['completed_tasks']
-                overdue_tasks += space_result['overdue_tasks']
-                high_priority_tasks += space_result['high_priority_tasks']
+                for key in workspace_metrics:
+                    workspace_metrics[key] += space_result.get(key, 0)
         
-        task_completion_rate = (completed_tasks / task_count * 100) if task_count > 0 else 0
+        workspace_metrics["task_completion_rate"] = (
+            (workspace_metrics["completed_tasks"] / workspace_metrics["task_count"] * 100)
+            if workspace_metrics["task_count"] > 0 else 0
+        )
         
         return {
-            "🪐 Spaces": space_count,
-            "📂 Folders": folder_count,
-            "🗂️ Lists": list_count,
-            "📝 Total Tasks": task_count,
-            "⚠️ Overdue Tasks": overdue_tasks,
-            "🔥 High Priority Tasks": high_priority_tasks
+            "🪐 Spaces": workspace_metrics["space_count"],
+            "📂 Folders": workspace_metrics["folder_count"],
+            "🗂️ Lists": workspace_metrics["list_count"],
+            "📝 Total Tasks": workspace_metrics["task_count"],
+            "⚠️ Overdue Tasks": workspace_metrics["overdue_tasks"],
+            "🔥 High Priority Tasks": workspace_metrics["high_priority_tasks"]
         }
     except Exception as e:
+        logging.error(f"Exception: {str(e)}")
         return {"error": f"Exception: {str(e)}"}
 
 def fetch_space_details(api_key, space_id):
@@ -105,101 +123,104 @@ def fetch_space_details(api_key, space_id):
     Fetches details for a specific space including folders, lists, and tasks.
     """
     headers = {"Authorization": api_key}
-    folder_count, list_count, task_count = 0, 0, 0
-    completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
+    space_metrics = {
+        "folder_count": 0,
+        "list_count": 0,
+        "task_count": 0,
+        "completed_tasks": 0,
+        "overdue_tasks": 0,
+        "high_priority_tasks": 0
+    }
 
     folders_url = f"https://api.clickup.com/api/v2/space/{space_id}/folder"
-    start_time = time.time()
-    folders_response = requests.get(folders_url, headers=headers).json()
-    logging.info(f"API call to {folders_url} took {time.time() - start_time:.2f} seconds")
+    folders_response = make_api_call(folders_url, headers)
     folders = folders_response.get("folders", [])
-    folder_count += len(folders)
+    space_metrics["folder_count"] += len(folders)
     
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_folder = {executor.submit(fetch_folder_details, api_key, folder["id"]): folder for folder in folders}
         for future in concurrent.futures.as_completed(future_to_folder):
             folder_result = future.result()
-            list_count += folder_result['list_count']
-            task_count += folder_result['task_count']
-            completed_tasks += folder_result['completed_tasks']
-            overdue_tasks += folder_result['overdue_tasks']
-            high_priority_tasks += folder_result['high_priority_tasks']
+            for key in space_metrics:
+                space_metrics[key] += folder_result.get(key, 0)
     
-    return {
-        'folder_count': folder_count,
-        'list_count': list_count,
-        'task_count': task_count,
-        'completed_tasks': completed_tasks,
-        'overdue_tasks': overdue_tasks,
-        'high_priority_tasks': high_priority_tasks
-    }
+    return space_metrics
 
 def fetch_folder_details(api_key, folder_id):
     """
     Fetches details for a specific folder including lists and tasks.
     """
     headers = {"Authorization": api_key}
-    list_count, task_count = 0, 0
-    completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
+    folder_metrics = {
+        "list_count": 0,
+        "task_count": 0,
+        "completed_tasks": 0,
+        "overdue_tasks": 0,
+        "high_priority_tasks": 0
+    }
 
     lists_url = f"https://api.clickup.com/api/v2/folder/{folder_id}/list"
-    start_time = time.time()
-    lists_response = requests.get(lists_url, headers=headers).json()
-    logging.info(f"API call to {lists_url} took {time.time() - start_time:.2f} seconds")
+    lists_response = make_api_call(lists_url, headers)
     lists = lists_response.get("lists", [])
-    list_count += len(lists)
+    folder_metrics["list_count"] += len(lists)
     
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_list = {executor.submit(fetch_list_details, api_key, lst["id"]): lst for lst in lists}
         for future in concurrent.futures.as_completed(future_to_list):
             list_result = future.result()
-            task_count += list_result['task_count']
-            completed_tasks += list_result['completed_tasks']
-            overdue_tasks += list_result['overdue_tasks']
-            high_priority_tasks += list_result['high_priority_tasks']
+            for key in folder_metrics:
+                folder_metrics[key] += list_result.get(key, 0)
     
-    return {
-        'list_count': list_count,
-        'task_count': task_count,
-        'completed_tasks': completed_tasks,
-        'overdue_tasks': overdue_tasks,
-        'high_priority_tasks': high_priority_tasks
-    }
+    return folder_metrics
 
 def fetch_list_details(api_key, list_id):
     """
     Fetches details for a specific list including tasks.
     """
     headers = {"Authorization": api_key}
-    task_count = 0
-    completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
+    list_metrics = {
+        "task_count": 0,
+        "completed_tasks": 0,
+        "overdue_tasks": 0,
+        "high_priority_tasks": 0
+    }
 
     tasks_url = f"https://api.clickup.com/api/v2/list/{list_id}/task"
-    start_time = time.time()
     params = {
         "archived": "false",
         "subtasks": "true"
     }
-    tasks_response = requests.get(tasks_url, headers=headers, params=params).json()
-    logging.info(f"API call to {tasks_url} took {time.time() - start_time:.2f} seconds")
+    tasks_response = make_api_call(tasks_url, headers, params)
     tasks = tasks_response.get("tasks", [])
-    task_count += len(tasks)
+    list_metrics["task_count"] += len(tasks)
     
     for task in tasks:
         status = task.get("status", {}).get("type", "").lower()
         logging.info(f"Task ID: {task['id']} - Status: {status}")
-        completed_tasks += 1 if status in ["closed", "done", "completed"] else 0
-        overdue_tasks += 1 if task.get("due_date") and int(task["due_date"]) < int(time.time() * 1000) else 0
-        high_priority_tasks += 1 if task.get("priority", "") in ["urgent", "high"] else 0
+        list_metrics["completed_tasks"] += 1 if status in ["closed", "done", "completed"] else 0
+        list_metrics["overdue_tasks"] += 1 if task.get("due_date") and int(task["due_date"]) < int(time.time() * 1000) else 0
+        list_metrics["high_priority_tasks"] += 1 if task.get("priority", "") in ["urgent", "high"] else 0
 
-    logging.info(f"Total tasks: {task_count}, Completed tasks: {completed_tasks}")
+    logging.info(f"Total tasks: {list_metrics['task_count']}, Completed tasks: {list_metrics['completed_tasks']}")
     
-    return {
-        'task_count': task_count,
-        'completed_tasks': completed_tasks,
-        'overdue_tasks': overdue_tasks,
-        'high_priority_tasks': high_priority_tasks
-    }
+    return list_metrics
+
+def make_api_call(url, headers, params=None):
+    """
+    Makes an API call and handles errors and logging.
+    """
+    try:
+        start_time = time.time()
+        response = requests.get(url, headers=headers, params=params)
+        logging.info(f"API call to {url} took {time.time() - start_time:.2f} seconds")
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logging.error(f"Error {response.status_code}: {response.text}")
+            return {}
+    except Exception as e:
+        logging.error(f"Exception: {str(e)}")
+        return {}
 
 def get_ai_recommendations(use_case, company_profile, workspace_details):
     """
@@ -229,13 +250,17 @@ def get_ai_recommendations(use_case, company_profile, workspace_details):
     """)
     
     try:
-        response = gpt4free.Completion.create(
-            provider=providers.You,  # You can choose the provider you prefer
-            prompt=prompt,
-            model="gpt-3.5-turbo"
-        )
-        return response.text
+        if openai_api_key:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content
     except Exception as e:
+        logging.error(f"Error generating AI recommendations: {str(e)}")
         return f"⚠️ AI recommendations are not available: {str(e)}"
 
 # ----------------------- #
@@ -283,4 +308,10 @@ if st.button("🚀 Let's Go!"):
         st.subheader("🏢 Company Profile")
         st.markdown(company_profile, unsafe_allow_html=True)
     else:
-        company_profile = "No company information provided
+        company_profile = "No company information provided."
+    
+    with st.spinner("Generating AI recommendations..."):
+        recommendations = get_ai_recommendations(use_case, company_profile, workspace_data)
+        st.markdown(recommendations, unsafe_allow_html=True)
+
+st.markdown("<div style='position: fixed; bottom: 10px; left: 10px; font-size: 12px; color: orange; '>A little tool made by: Yul 😊</div>", unsafe_allow_html=True)
