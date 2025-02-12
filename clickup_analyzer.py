@@ -12,15 +12,7 @@ logging.basicConfig(level=logging.INFO)
 # Set page title and icon
 st.set_page_config(page_title="ClickUp Workspace Analysis", page_icon="🚀", layout="wide")
 
-# Retrieve API keys from Streamlit secrets
-openai_api_key = st.secrets.get("OPENAI_API_KEY")
-openai_org_id = st.secrets.get("OPENAI_ORG_ID")
 deepseek_api_key = st.secrets.get("DEEPSEEK_API_KEY")
-
-# Configure OpenAI if API keys are available
-if openai_api_key:
-    openai.organization = openai_org_id
-    openai.api_key = openai_api_key
 
 def get_company_info(company_name):
     """
