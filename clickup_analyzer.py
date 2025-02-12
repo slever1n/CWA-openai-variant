@@ -46,7 +46,7 @@ def get_company_info(company_name):
             }
             # Make the API request to DeepSeek
             response = requests.post(
-                "https://api.deepseek.com/v1/chat/completions",  # Replace with the actual DeepSeek API endpoint
+                "https://api.deepseek.com/chat/completions",  # Replace with the actual DeepSeek API endpoint
                 json=payload,
                 headers=headers
             )
@@ -264,7 +264,7 @@ def get_ai_recommendations(use_case, company_profile, workspace_details):
             }
             # Make the API request to DeepSeek
             response = requests.post(
-                "https://api.deepseek.com/v1/chat/completions",  # Replace with the actual DeepSeek API endpoint
+                "https://api.deepseek.com/chat/completions",  # Replace with the actual DeepSeek API endpoint
                 json=payload,
                 headers=headers
             )
