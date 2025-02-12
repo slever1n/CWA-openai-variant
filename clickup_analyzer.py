@@ -1,22 +1,56 @@
-import streamlit as st
 import requests
+import streamlit as st
+import time
+import openai
+import textwrap
+import concurrent.futures
 import logging
 
-# Configure logging
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Streamlit UI
-st.set_page_config(page_title="ClickUp Workspace Analyzer", layout="wide")
-st.title("🚀 ClickUp Workspace Analyzer")
-st.markdown("Get insights and recommendations based on your ClickUp workspace!")
+# Set page title and icon
+st.set_page_config(page_title="ClickUp Workspace Analysis", page_icon="🚀", layout="wide")
 
-# --- User Inputs ---
-clickup_api_key = st.text_input("🔑 Enter your ClickUp API Key:", type="password")
-company_name = st.text_input("🏢 Enter your Company Name:")
-use_case = st.text_area("🎯 Describe Your Use Case:")
+# Retrieve API keys from Streamlit secrets
+openai_api_key = st.secrets.get("OPENAI_API_KEY")
+openai_org_id = st.secrets.get("OPENAI_ORG_ID")
 
-# Function to get workspace details from ClickUp API
-def get_workspace_details(api_key):
+# Configure OpenAI if API keys are available
+if openai_api_key:
+    openai.organization = openai_org_id
+    openai.api_key = openai_api_key
+
+def get_company_info(company_name):
+    if not company_name:
+        return "No company information provided."
+    
+    prompt = textwrap.dedent(f"""
+        Please build a short company profile for {company_name}. The profile should include:
+        - **Mission:** A brief mission statement.
+        - **Key Features:** List 3-5 key features.
+        - **Values:** Describe the core values.
+        - **Target Audience:** Describe the target audience.
+        - **Overall Summary:** Provide an overview.
+    """)
+    
+    try:
+        if openai_api_key:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.choices[0].message.content
+        else:
+            return "No AI service available for generating company profile."
+    except Exception as e:
+        logging.error(f"Error fetching company details: {str(e)}")
+        return f"Error: {str(e)}"
+
+def fetch_workspaces(api_key):
     url = "https://api.clickup.com/api/v2/team"
     headers = {"Authorization": api_key}
     
@@ -24,98 +58,66 @@ def get_workspace_details(api_key):
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             teams = response.json().get("teams", [])
-            return teams if teams else "No teams found."
+            return {team["id"]: team["name"] for team in teams}
         else:
-            return f"Error: {response.status_code} - {response.text}"
+            return None
     except Exception as e:
-        logging.error(f"ClickUp API error: {str(e)}")
-        return "Error fetching workspace details."
+        logging.error(f"Exception: {str(e)}")
+        return None
 
-# Function to generate company profile using DeepSeek API
-def get_company_info(company_name):
-    if not company_name:
-        return "No company information provided."
-    
-    prompt = f"""
-    Please build a short company profile for {company_name}. The profile should include:
-    - **Mission**
-    - **Key Features**
-    - **Values**
-    - **Target Audience**
-    - **Overall Summary**
-    """
-    
-    api_url = "https://api.deepseek.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {st.secrets.get('DEEPSEEK_API_KEY')}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": prompt}]
-    }
+def fetch_workspace_details(api_key, team_id):
+    headers = {"Authorization": api_key}
+    spaces_url = f"https://api.clickup.com/api/v2/team/{team_id}/space"
     
     try:
-        response = requests.post(api_url, headers=headers, json=data)
-        response_json = response.json()
-        return response_json.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+        spaces_response = make_api_call(spaces_url, headers)
+        spaces = spaces_response.get("spaces", [])
+        
+        return {"Spaces": len(spaces)}
     except Exception as e:
-        logging.error(f"Error fetching company details: {str(e)}")
-        return f"Error: {str(e)}"
+        logging.error(f"Exception: {str(e)}")
+        return {"error": f"Exception: {str(e)}"}
 
-# Function to generate AI-based recommendations
-def get_ai_recommendations(use_case, company_profile, workspace_details):
-    prompt = f"""
-    Analyze the following workspace data:
-    {workspace_details}
-    
-    Company use case: "{use_case}"
-    Company profile: {company_profile}
-    
-    Provide:
-    - 📈 Productivity Analysis
-    - ✅ Actionable Recommendations
-    - 🏆 Best Practices & Tips
-    - 🛠️ Useful ClickUp Templates & Resources
-    """
-    
-    api_url = "https://api.deepseek.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {st.secrets.get('DEEPSEEK_API_KEY')}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    
+def make_api_call(url, headers):
     try:
-        response = requests.post(api_url, headers=headers, json=data)
-        response_json = response.json()
-        return response_json.get("choices", [{}])[0].get("message", {}).get("content", "No response.")
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logging.error(f"Error {response.status_code}: {response.text}")
+            return {}
     except Exception as e:
-        logging.error(f"Error generating AI recommendations: {str(e)}")
-        return f"⚠️ AI recommendations are not available: {str(e)}"
+        logging.error(f"Exception: {str(e)}")
+        return {}
 
-# Run Analysis
-if st.button("🔍 Analyze Workspace"):
-    if clickup_api_key and company_name and use_case:
-        with st.spinner("Fetching workspace details..."):
-            workspace_details = get_workspace_details(clickup_api_key)
-        
-        with st.spinner("Generating company profile..."):
-            company_profile = get_company_info(company_name)
-        
-        with st.spinner("Generating AI recommendations..."):
-            recommendations = get_ai_recommendations(use_case, company_profile, workspace_details)
-        
-        st.subheader("📊 ClickUp Workspace Details:")
-        st.json(workspace_details)
-        
-        st.subheader("🏢 Company Profile:")
-        st.write(company_profile)
-        
-        st.subheader("🤖 AI-Powered Recommendations:")
-        st.write(recommendations)
+st.title("🚀 ClickUp Workspace Analysis")
+
+api_key = st.text_input("Enter ClickUp API Key:", type="password")
+if api_key:
+    workspaces = fetch_workspaces(api_key)
+    if workspaces:
+        workspace_id = st.selectbox("Select Workspace:", options=list(workspaces.keys()), format_func=lambda x: workspaces[x])
     else:
-        st.warning("Please fill in all fields before analyzing!")
+        st.error("Failed to fetch workspaces. Check API key.")
+else:
+    workspace_id = None
+
+company_name = st.text_input("Enter Company Name (Optional):")
+use_case = st.text_area("Describe your company's use case:")
+
+if st.button("Analyze"):
+    if api_key and workspace_id:
+        workspace_data = fetch_workspace_details(api_key, workspace_id)
+        if "error" in workspace_data:
+            st.error(workspace_data["error"])
+        else:
+            st.subheader("Workspace Summary")
+            for key, value in workspace_data.items():
+                st.metric(label=key, value=value)
+    
+    if company_name:
+        company_profile = get_company_info(company_name)
+        st.subheader("Company Profile")
+        st.markdown(company_profile, unsafe_allow_html=True)
+
+st.markdown("<div style='position: fixed; bottom: 10px; left: 10px; font-size: 12px; color: orange;'>Built by: Yul 😊</div>", unsafe_allow_html=True)
