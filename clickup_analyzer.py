@@ -15,7 +15,7 @@ st.set_page_config(page_title="ClickUp Workspace Analysis", page_icon="🚀", la
 # Retrieve API keys from Streamlit secrets
 openai_api_key = st.secrets.get("OPENAI_API_KEY")
 openai_org_id = st.secrets.get("OPENAI_ORG_ID")
-deepseek_api_key = st.secrets.get("DEEPSEEK_API_KEY"
+deepseek_api_key = st.secrets.get("DEEPSEEK_API_KEY")
 
 # Configure OpenAI if API keys are available
 if openai_api_key:
