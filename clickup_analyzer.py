@@ -43,7 +43,7 @@ def get_company_info(company_name):
     
     try:
 
-if client = OpenAI(api_key=(deepseek_api_key), base_url="https://api.deepseek.com")
+if client = OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
 
 response = client.chat.completions.create(
     model="deepseek-chat",
