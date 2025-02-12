@@ -5,9 +5,6 @@ import openai
 import textwrap
 import concurrent.futures
 import logging
-from openai import OpenAI
-
-
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +15,7 @@ st.set_page_config(page_title="ClickUp Workspace Analysis", page_icon="🚀", la
 # Retrieve API keys from Streamlit secrets
 openai_api_key = st.secrets.get("OPENAI_API_KEY")
 openai_org_id = st.secrets.get("OPENAI_ORG_ID")
-deepseek_api_key = st.secrets.get("DEEPSEEK_API_KEY")
+deepseek_api_key = st.secrets.get("DEEPSEEK_API_KEY"
 
 # Configure OpenAI if API keys are available
 if openai_api_key:
@@ -27,7 +24,7 @@ if openai_api_key:
 
 def get_company_info(company_name):
     """
-    Generates a short company profile for the given company name using OpenAI.
+    Generates a short company profile for the given company name using DeepSeek.
     """
     if not company_name:
         return "No company information provided."
@@ -42,23 +39,32 @@ def get_company_info(company_name):
     """)
     
     try:
-
-if client = OpenAI(api_key="sk-2984c908d77a45e2aa3c776d6190be4c", base_url="https://api.deepseek.com")
-
-response = client.chat.completions.create(
-    model="deepseek-chat",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant"},
-        {"role": "user", "content": "Hello"},
-    ],
-    stream=False
-)
-
-print(response.choices[0].message.content)
+        if deepseek_api_key:
+            # Prepare the payload for DeepSeek API
+            payload = {
+                "model": "deepseek-chat",  # Replace with the correct model name
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            }
+            headers = {
+                "Authorization": f"Bearer {deepseek_api_key}",
+                "Content-Type": "application/json"
+            }
+            # Make the API request to DeepSeek
+            response = requests.post(
+                "https://api.deepseek.com/v1/chat/completions",  # Replace with the actual DeepSeek API endpoint
+                json=payload,
+                headers=headers
+            )
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+            else:
+                return f"Error fetching company details: {response.status_code} - {response.text}"
         else:
             return "No AI service available for generating company profile."
     except Exception as e:
-        logging.error(f"Error fetching company details: {str(e)}")
         return f"Error fetching company details: {str(e)}"
 
 def fetch_workspaces(api_key):
@@ -89,41 +95,37 @@ def fetch_workspace_details(api_key, team_id):
     
     try:
         spaces_url = f"https://api.clickup.com/api/v2/team/{team_id}/space"
-        spaces_response = make_api_call(spaces_url, headers)
+        start_time = time.time()
+        spaces_response = requests.get(spaces_url, headers=headers).json()
+        logging.info(f"API call to {spaces_url} took {time.time() - start_time:.2f} seconds")
         spaces = spaces_response.get("spaces", [])
         
-        workspace_metrics = {
-            "space_count": len(spaces),
-            "folder_count": 0,
-            "list_count": 0,
-            "task_count": 0,
-            "completed_tasks": 0,
-            "overdue_tasks": 0,
-            "high_priority_tasks": 0
-        }
+        space_count = len(spaces)
+        folder_count, list_count, task_count = 0, 0, 0
+        completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_space = {executor.submit(fetch_space_details, api_key, space["id"]): space for space in spaces}
             for future in concurrent.futures.as_completed(future_to_space):
                 space_result = future.result()
-                for key in workspace_metrics:
-                    workspace_metrics[key] += space_result.get(key, 0)
+                folder_count += space_result['folder_count']
+                list_count += space_result['list_count']
+                task_count += space_result['task_count']
+                completed_tasks += space_result['completed_tasks']
+                overdue_tasks += space_result['overdue_tasks']
+                high_priority_tasks += space_result['high_priority_tasks']
         
-        workspace_metrics["task_completion_rate"] = (
-            (workspace_metrics["completed_tasks"] / workspace_metrics["task_count"] * 100)
-            if workspace_metrics["task_count"] > 0 else 0
-        )
+        task_completion_rate = (completed_tasks / task_count * 100) if task_count > 0 else 0
         
         return {
-            "🪐 Spaces": workspace_metrics["space_count"],
-            "📂 Folders": workspace_metrics["folder_count"],
-            "🗂️ Lists": workspace_metrics["list_count"],
-            "📝 Total Tasks": workspace_metrics["task_count"],
-            "⚠️ Overdue Tasks": workspace_metrics["overdue_tasks"],
-            "🔥 High Priority Tasks": workspace_metrics["high_priority_tasks"]
+            "🪐 Spaces": space_count,
+            "📂 Folders": folder_count,
+            "🗂️ Lists": list_count,
+            "📝 Total Tasks": task_count,
+            "⚠️ Overdue Tasks": overdue_tasks,
+            "🔥 High Priority Tasks": high_priority_tasks
         }
     except Exception as e:
-        logging.error(f"Exception: {str(e)}")
         return {"error": f"Exception: {str(e)}"}
 
 def fetch_space_details(api_key, space_id):
@@ -131,108 +133,105 @@ def fetch_space_details(api_key, space_id):
     Fetches details for a specific space including folders, lists, and tasks.
     """
     headers = {"Authorization": api_key}
-    space_metrics = {
-        "folder_count": 0,
-        "list_count": 0,
-        "task_count": 0,
-        "completed_tasks": 0,
-        "overdue_tasks": 0,
-        "high_priority_tasks": 0
-    }
+    folder_count, list_count, task_count = 0, 0, 0
+    completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
 
     folders_url = f"https://api.clickup.com/api/v2/space/{space_id}/folder"
-    folders_response = make_api_call(folders_url, headers)
+    start_time = time.time()
+    folders_response = requests.get(folders_url, headers=headers).json()
+    logging.info(f"API call to {folders_url} took {time.time() - start_time:.2f} seconds")
     folders = folders_response.get("folders", [])
-    space_metrics["folder_count"] += len(folders)
+    folder_count += len(folders)
     
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_folder = {executor.submit(fetch_folder_details, api_key, folder["id"]): folder for folder in folders}
         for future in concurrent.futures.as_completed(future_to_folder):
             folder_result = future.result()
-            for key in space_metrics:
-                space_metrics[key] += folder_result.get(key, 0)
+            list_count += folder_result['list_count']
+            task_count += folder_result['task_count']
+            completed_tasks += folder_result['completed_tasks']
+            overdue_tasks += folder_result['overdue_tasks']
+            high_priority_tasks += folder_result['high_priority_tasks']
     
-    return space_metrics
+    return {
+        'folder_count': folder_count,
+        'list_count': list_count,
+        'task_count': task_count,
+        'completed_tasks': completed_tasks,
+        'overdue_tasks': overdue_tasks,
+        'high_priority_tasks': high_priority_tasks
+    }
 
 def fetch_folder_details(api_key, folder_id):
     """
     Fetches details for a specific folder including lists and tasks.
     """
     headers = {"Authorization": api_key}
-    folder_metrics = {
-        "list_count": 0,
-        "task_count": 0,
-        "completed_tasks": 0,
-        "overdue_tasks": 0,
-        "high_priority_tasks": 0
-    }
+    list_count, task_count = 0, 0
+    completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
 
     lists_url = f"https://api.clickup.com/api/v2/folder/{folder_id}/list"
-    lists_response = make_api_call(lists_url, headers)
+    start_time = time.time()
+    lists_response = requests.get(lists_url, headers=headers).json()
+    logging.info(f"API call to {lists_url} took {time.time() - start_time:.2f} seconds")
     lists = lists_response.get("lists", [])
-    folder_metrics["list_count"] += len(lists)
+    list_count += len(lists)
     
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_list = {executor.submit(fetch_list_details, api_key, lst["id"]): lst for lst in lists}
         for future in concurrent.futures.as_completed(future_to_list):
             list_result = future.result()
-            for key in folder_metrics:
-                folder_metrics[key] += list_result.get(key, 0)
+            task_count += list_result['task_count']
+            completed_tasks += list_result['completed_tasks']
+            overdue_tasks += list_result['overdue_tasks']
+            high_priority_tasks += list_result['high_priority_tasks']
     
-    return folder_metrics
+    return {
+        'list_count': list_count,
+        'task_count': task_count,
+        'completed_tasks': completed_tasks,
+        'overdue_tasks': overdue_tasks,
+        'high_priority_tasks': high_priority_tasks
+    }
 
 def fetch_list_details(api_key, list_id):
     """
     Fetches details for a specific list including tasks.
     """
     headers = {"Authorization": api_key}
-    list_metrics = {
-        "task_count": 0,
-        "completed_tasks": 0,
-        "overdue_tasks": 0,
-        "high_priority_tasks": 0
-    }
+    task_count = 0
+    completed_tasks, overdue_tasks, high_priority_tasks = 0, 0, 0
 
     tasks_url = f"https://api.clickup.com/api/v2/list/{list_id}/task"
+    start_time = time.time()
     params = {
         "archived": "false",
         "subtasks": "true"
     }
-    tasks_response = make_api_call(tasks_url, headers, params)
+    tasks_response = requests.get(tasks_url, headers=headers, params=params).json()
+    logging.info(f"API call to {tasks_url} took {time.time() - start_time:.2f} seconds")
     tasks = tasks_response.get("tasks", [])
-    list_metrics["task_count"] += len(tasks)
+    task_count += len(tasks)
     
     for task in tasks:
         status = task.get("status", {}).get("type", "").lower()
         logging.info(f"Task ID: {task['id']} - Status: {status}")
-        list_metrics["completed_tasks"] += 1 if status in ["closed", "done", "completed"] else 0
-        list_metrics["overdue_tasks"] += 1 if task.get("due_date") and int(task["due_date"]) < int(time.time() * 1000) else 0
-        list_metrics["high_priority_tasks"] += 1 if task.get("priority", "") in ["urgent", "high"] else 0
+        completed_tasks += 1 if status in ["closed", "done", "completed"] else 0
+        overdue_tasks += 1 if task.get("due_date") and int(task["due_date"]) < int(time.time() * 1000) else 0
+        high_priority_tasks += 1 if task.get("priority", "") in ["urgent", "high"] else 0
 
-    logging.info(f"Total tasks: {list_metrics['task_count']}, Completed tasks: {list_metrics['completed_tasks']}")
+    logging.info(f"Total tasks: {task_count}, Completed tasks: {completed_tasks}")
     
-    return list_metrics
-
-def make_api_call(url, headers, params=None):
-    """
-    Makes an API call and handles errors and logging.
-    """
-    try:
-        start_time = time.time()
-        response = requests.get(url, headers=headers, params=params)
-        logging.info(f"API call to {url} took {time.time() - start_time:.2f} seconds")
-        if response.status_code == 200:
-            return response.json()
-        else:
-            logging.error(f"Error {response.status_code}: {response.text}")
-            return {}
-    except Exception as e:
-        logging.error(f"Exception: {str(e)}")
-        return {}
+    return {
+        'task_count': task_count,
+        'completed_tasks': completed_tasks,
+        'overdue_tasks': overdue_tasks,
+        'high_priority_tasks': high_priority_tasks
+    }
 
 def get_ai_recommendations(use_case, company_profile, workspace_details):
     """
-    Generates AI-powered recommendations based on workspace data, company profile, and use case.
+    Generates AI-powered recommendations based on workspace data, company profile, and use case using DeepSeek.
     """
     prompt = textwrap.dedent(f"""
         Based on the following workspace data:
@@ -258,20 +257,30 @@ def get_ai_recommendations(use_case, company_profile, workspace_details):
     """)
     
     try:
-if client = OpenAI(api_key="sk-2984c908d77a45e2aa3c776d6190be4c", base_url="https://api.deepseek.com")
-
-response = client.chat.completions.create(
-    model="deepseek-chat",
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant"},
-        {"role": "user", "content": "Hello"},
-    ],
-    stream=False
-)
-
-print(response.choices[0].message.content)
+        if deepseek_api_key:
+            # Prepare the payload for DeepSeek API
+            payload = {
+                "model": "deepseek-chat",  # Replace with the correct model name
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ]
+            }
+            headers = {
+                "Authorization": f"Bearer {deepseek_api_key}",
+                "Content-Type": "application/json"
+            }
+            # Make the API request to DeepSeek
+            response = requests.post(
+                "https://api.deepseek.com/v1/chat/completions",  # Replace with the actual DeepSeek API endpoint
+                json=payload,
+                headers=headers
+            )
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"]
+            else:
+                return f"⚠️ AI recommendations are not available: {response.status_code} - {response.text}"
     except Exception as e:
-        logging.error(f"Error generating AI recommendations: {str(e)}")
         return f"⚠️ AI recommendations are not available: {str(e)}"
 
 # ----------------------- #
