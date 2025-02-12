@@ -43,7 +43,7 @@ def get_company_info(company_name):
     
     try:
 
-if client = OpenAI(api_key=deepseek_api_key, base_url="https://api.deepseek.com")
+if client = OpenAI(api_key="sk-2984c908d77a45e2aa3c776d6190be4c", base_url="https://api.deepseek.com")
 
 response = client.chat.completions.create(
     model="deepseek-chat",
@@ -258,7 +258,7 @@ def get_ai_recommendations(use_case, company_profile, workspace_details):
     """)
     
     try:
-if client = OpenAI(api_key=(deepseek_api_key), base_url="https://api.deepseek.com")
+if client = OpenAI(api_key="sk-2984c908d77a45e2aa3c776d6190be4c", base_url="https://api.deepseek.com")
 
 response = client.chat.completions.create(
     model="deepseek-chat",
